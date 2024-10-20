@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - VideoConnect</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #eef99e;
+            color: #333;
+        }
+        .login-container {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: rgb(214, 192, 118);
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #456847;
+            font-weight: 700;
+            margin-bottom: 30px;
+        }
+        .form-group label {
+            font-weight: 500;
+            color: #555;
+        }
+        .form-control {
+            border-radius: 5px;
+            border: 1px solid #ced4da;
+            padding: 10px 15px;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        .form-control:focus {
+            border-color: #578659;
+            box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.25);
+        }
+        .btn-primary {
+            background-color: #426043;
+            border-color: #558e57;
+            padding: 10px 20px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            transition: background-color 0.15s ease-in-out;
+        }
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: #5b865d;
+            border-color: #4b7c4e;
+        }
+        .signup-link {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .signup-link a {
+            color: #649b66;
+            text-decoration: none;
+            transition: color 0.15s ease-in-out;
+        }
+        .signup-link a:hover {
+            color: #529655;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="login-container">
+            <h2 class="text-center">Login to VideoConnect</h2>
+            <form id="loginForm" method="post" action="{% url 'login' %}">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" class="form-control" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Login</button>
+            </form>
+            <div class="signup-link">
+                <a href="{% url 'signup' %}">Don't have an account? Sign up</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
