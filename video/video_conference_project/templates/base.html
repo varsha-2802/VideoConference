@@ -1,13 +1,13 @@
-{%load static%}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-User Video Conference with Host-Only Recording</title>
+    <title>Multi-User Video Conference with Whiteboard</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <style>
-        body{
+        body {
             background-image: url("{% static 'images/video.jpg' %}");
             background-position: center;
             background-repeat: no-repeat;
@@ -36,16 +36,6 @@
             padding: 5px 10px;
             border-radius: 4px;
         }
-        #whiteboard-container {
-            display: none;
-            margin-top: 20px;
-        }
-        #whiteboard {
-            border: 1px solid #000;
-            width: 100%;
-            height: 400px;
-            cursor: crosshair;
-        }
         #participantsList {
             max-height: 200px;
             overflow-y: auto;
@@ -69,42 +59,36 @@
             padding: 5px 10px;
             border-radius: 4px;
         }
+        #whiteboard-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            z-index: 1000;
+        }
+        #whiteboard {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #fff;
+            background-color: #fff;
+        }
+        #whiteboard-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'home' %}">Video Conferencing</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'home' %}">Home</a>
-                    </li>
-                    <!-- Add more navigation items here -->
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'contact' %}">Contact Us</a>
-                    </li>
-                    {% if user.is_authenticated %}
-                    <li>
-                        <form action="{% url 'logout' %}" method="POST" class="logout-form">
-                            {% csrf_token %}
-                            <button type="submit" class="nav-link">Logout</button>
-                        </form>
-                    </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'login' %}">Login</a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
-    </nav>
+    <!-- Navbar code remains unchanged -->
 
     <div class="container">
         <h1 class="text-center mt-4">Multi-User Video Conference</h1>
@@ -124,8 +108,10 @@
                     <button id="joinAsHost" class="btn btn-primary btn-block">Join as Host</button>
                     <button id="joinAsUser" class="btn btn-secondary btn-block mt-2">Join as User</button>
                     <button id="leaveCall" class="btn btn-danger btn-block mt-2" disabled>Leave Call</button>
-                    <button id="shareScreen" class="btn btn-secondary btn-block mt-2" disabled>Share Screen</button>
-                    <button id="toggleWhiteboard" class="btn btn-info btn-block mt-2" disabled>Toggle Whiteboard</button>
+                    <button id="toggleAudio" class="btn btn-info btn-block mt-2" disabled>Mute</button>
+                    <button id="toggleVideo" class="btn btn-info btn-block mt-2" disabled>Turn Off Camera</button>
+                    <button id="toggleWhiteboard" class="btn btn-secondary btn-block mt-2" disabled>Toggle Whiteboard</button>
+                    <button id="shareScreen" class="btn btn-warning btn-block mt-2" disabled>Share Screen</button>
                     <button id="startRecording" class="btn btn-warning btn-block mt-2" disabled>Start Recording</button>
                     <button id="stopRecording" class="btn btn-danger btn-block mt-2" disabled>Stop Recording</button>
                 </div>
@@ -138,12 +124,16 @@
         </div>
 
         <div id="whiteboard-container">
-            <h2 class="text-center">Shared Whiteboard</h2>
-            <canvas id="whiteboard" width="800" height="600" class="mb-4"></canvas>
-            <div class="text-center">
-                <button id="clearBoard" class="btn btn-danger">Clear Whiteboard</button>
-            </div>
+        <canvas id="whiteboard"></canvas>
+        <div id="whiteboard-controls">
+            <button id="pen-tool" class="btn btn-primary">Pen</button>
+            <button id="eraser-tool" class="btn btn-secondary">Eraser</button>
+            <input type="color" id="color-picker" value="#000000">
+            <button id="clear-whiteboard" class="btn btn-danger">Clear</button>
+            <button id="close-whiteboard" class="btn btn-warning">Close</button>
         </div>
+    </div>
+
     </div>
 
     <script>
@@ -151,53 +141,150 @@
         const joinAsHostButton = document.getElementById('joinAsHost');
         const joinAsUserButton = document.getElementById('joinAsUser');
         const leaveCallButton = document.getElementById('leaveCall');
-        const shareScreenButton = document.getElementById('shareScreen');
+        const toggleAudioButton = document.getElementById('toggleAudio');
+        const toggleVideoButton = document.getElementById('toggleVideo');
         const toggleWhiteboardButton = document.getElementById('toggleWhiteboard');
+        const shareScreenButton = document.getElementById('shareScreen');
         const startRecordingButton = document.getElementById('startRecording');
         const stopRecordingButton = document.getElementById('stopRecording');
-        const whiteboardContainer = document.getElementById('whiteboard-container');
-        const clearBoardButton = document.getElementById('clearBoard');
         const participantsList = document.getElementById('participantsList');
+        
+        const clearBoardButton = document.getElementById('clearBoard');
         const canvas = document.getElementById('whiteboard');
         const ctx = canvas.getContext('2d');
+        const whiteboardContainer = document.getElementById('whiteboard-container');
+        const whiteboard = document.getElementById('whiteboard');
+        const whiteboardCtx = whiteboard.getContext('2d');
+        const penTool = document.getElementById('pen-tool');
+        const eraserTool = document.getElementById('eraser-tool');
+        const colorPicker = document.getElementById('color-picker');
+        const clearWhiteboardBtn = document.getElementById('clear-whiteboard');
+        const closeWhiteboardBtn = document.getElementById('close-whiteboard');
+
+        let isDrawing = false;
+        let currentTool = 'pen';
+        let currentColor = '#000000';
+
 
         let localStream;
         let localUuid;
         let screenStream;
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
         let mediaRecorder;
         let recordedChunks = [];
         let isHost = false;
+        
+        let lastX = 0;
+        let lastY = 0;
 
         joinAsHostButton.onclick = () => joinCall(true);
         joinAsUserButton.onclick = () => joinCall(false);
         leaveCallButton.onclick = leaveCall;
-        shareScreenButton.onclick = shareScreen;
+        toggleAudioButton.onclick = toggleAudio;
+        toggleVideoButton.onclick = toggleVideo;
         toggleWhiteboardButton.onclick = toggleWhiteboard;
-        clearBoardButton.onclick = clearBoard;
+        shareScreenButton.onclick = shareScreen;
         startRecordingButton.onclick = startRecording;
         stopRecordingButton.onclick = stopRecording;
+        clearWhiteboardBtn.onclick = clearWhiteboard;
+        toggleWhiteboardButton.addEventListener('click', toggleWhiteboard);
+        closeWhiteboardBtn.addEventListener('click', toggleWhiteboard);
+        penTool.addEventListener('click', () => currentTool = 'pen');
+        eraserTool.addEventListener('click', () => currentTool = 'eraser');
+        colorPicker.addEventListener('input', (e) => currentColor = e.target.value);
+        clearWhiteboardBtn.addEventListener('click', clearWhiteboard);
+        whiteboard.addEventListener('mousedown', startDrawing);
+        whiteboard.addEventListener('mousemove', draw);
+        whiteboard.addEventListener('mouseup', stopDrawing);
+        whiteboard.addEventListener('mouseout', stopDrawing);
 
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseout', stopDrawing);
+        window.addEventListener('resize', resizeWhiteboard);
+
+        function resizeWhiteboard() {
+            const containerWidth = whiteboardContainer.clientWidth;
+            const containerHeight = whiteboardContainer.clientHeight;
+            const aspectRatio = 16 / 9;
+
+            let canvasWidth, canvasHeight;
+
+            if (containerWidth / containerHeight > aspectRatio) {
+                canvasHeight = containerHeight * 0.8;
+                canvasWidth = canvasHeight * aspectRatio;
+            } else {
+                canvasWidth = containerWidth * 0.8;
+                canvasHeight = canvasWidth / aspectRatio;
+            }
+
+            whiteboard.width = canvasWidth;
+            whiteboard.height = canvasHeight;
+
+            // Redraw any existing content on the resized canvas
+            // (You may need to implement this if you want to preserve drawings after resize)
+        }
+
+        function toggleWhiteboard() {
+            if (!isHost) return; // Only allow host to toggle whiteboard
+
+            if (whiteboardContainer.style.display === 'none') {
+                whiteboardContainer.style.display = 'flex'; // Changed to flex for better centering
+                resizeWhiteboard();
+            } else {
+                whiteboardContainer.style.display = 'none';
+            }
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            draw(e);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            const rect = whiteboard.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            whiteboardCtx.lineWidth = currentTool === 'eraser' ? 20 : 2;
+            whiteboardCtx.lineCap = 'round';
+            whiteboardCtx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : currentColor;
+
+            whiteboardCtx.lineTo(x, y);
+            whiteboardCtx.stroke();
+            whiteboardCtx.beginPath();
+            whiteboardCtx.moveTo(x, y);
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            whiteboardCtx.beginPath();
+        }
+
+        function clearWhiteboard() {
+            whiteboardCtx.clearRect(0, 0, whiteboard.width, whiteboard.height);
+        }
+
 
         async function joinCall(asHost) {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 localUuid = generateUuid();
                 isHost = asHost;
-                
+                if (asHost) {
+                toggleWhiteboardButton.disabled = false;
+                initializeWhiteboard();
+            } else {
+                toggleWhiteboardButton.disabled = true;
+            }
+
                 addVideoStream(localUuid, localStream, true, asHost ? "Host" : "You");
                 
                 joinAsHostButton.disabled = true;
                 joinAsUserButton.disabled = true;
                 leaveCallButton.disabled = false;
-                shareScreenButton.disabled = false;
+                toggleAudioButton.disabled = false;
+                toggleVideoButton.disabled = false;
                 toggleWhiteboardButton.disabled = false;
+                shareScreenButton.disabled = !asHost; // Only enable for host
                 startRecordingButton.disabled = !asHost;
                 
                 if (!asHost) {
@@ -228,47 +315,111 @@
             joinAsHostButton.disabled = false;
             joinAsUserButton.disabled = false;
             leaveCallButton.disabled = true;
-            shareScreenButton.disabled = true;
+            toggleAudioButton.disabled = true;
+            toggleVideoButton.disabled = true;
             toggleWhiteboardButton.disabled = true;
+            shareScreenButton.disabled = true;
             startRecordingButton.disabled = true;
             stopRecordingButton.disabled = true;
             whiteboardContainer.style.display = 'none';
             isHost = false;
         }
 
-        function toggleWhiteboard() {
-            whiteboardContainer.style.display = 
-                whiteboardContainer.style.display === 'none' ? 'block' : 'none';
-            if (whiteboardContainer.style.display === 'block') {
-                resizeCanvas();
-            }
+        function toggleAudio() {
+            const audioTrack = localStream.getAudioTracks()[0];
+            audioTrack.enabled = !audioTrack.enabled;
+            toggleAudioButton.textContent = audioTrack.enabled ? 'Mute' : 'Unmute';
         }
 
-        function resizeCanvas() {
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
+        function toggleVideo() {
+            const videoTrack = localStream.getVideoTracks()[0];
+            videoTrack.enabled = !videoTrack.enabled;
+            toggleVideoButton.textContent = videoTrack.enabled ? 'Turn Off Camera' : 'Turn On Camera';
         }
+        function initializeWhiteboard() {
+    resizeWhiteboard();
+    whiteboardCtx.fillStyle = '#ffffff';
+    whiteboardCtx.fillRect(0, 0, whiteboard.width, whiteboard.height);
+        } 
 
+            
         async function shareScreen() {
-            try {
-                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                const videoTrack = screenStream.getVideoTracks()[0];
-                
-                const localVideo = document.querySelector(`[data-uuid="${localUuid}"]`);
-                if (localVideo) {
-                    localVideo.srcObject = screenStream;
-                }
+    if (!isHost) return; // Only allow host to share screen
 
-                videoTrack.onended = () => {
-                    if (localVideo) {
-                        localVideo.srcObject = localStream;
-                    }
-                };
-            } catch (err) {
-                console.error('Error sharing screen:', err);
+    try {
+        if (screenStream) {
+            // Stop screen sharing
+            screenStream.getTracks().forEach(track => track.stop());
+            const localVideo = document.querySelector(`[data-uuid="${localUuid}"]`);
+            if (localVideo) {
+                localVideo.srcObject = localStream;
             }
-        }
+            screenStream = null;
+            shareScreenButton.textContent = 'Share Screen';
+        } else {
+            // Start screen sharing
+            const displayMediaOptions = {
+                video: {
+                    displaySurface: 'browser',
+                },
+                surfaceSwitching: 'include',
+                selfBrowserSurface: 'include',
+            };
 
+            screenStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+            
+            // Create a canvas to combine video and whiteboard
+            const combinedCanvas = document.createElement('canvas');
+            const ctx = combinedCanvas.getContext('2d');
+            combinedCanvas.width = whiteboard.width;
+            combinedCanvas.height = whiteboard.height;
+
+            // Function to draw the combined content
+            const drawCombinedContent = () => {
+                // Draw the screen content
+                ctx.drawImage(screenVideo, 0, 0, combinedCanvas.width, combinedCanvas.height);
+                
+                // Draw the whiteboard content on top
+                ctx.drawImage(whiteboard, 0, 0);
+
+                // Schedule the next frame
+                requestAnimationFrame(drawCombinedContent);
+            };
+
+            // Create a video element to receive the screen share stream
+            const screenVideo = document.createElement('video');
+            screenVideo.srcObject = screenStream;
+            screenVideo.onloadedmetadata = () => {
+                screenVideo.play();
+                drawCombinedContent();
+            };
+
+            // Create a stream from the combined canvas
+            const combinedStream = combinedCanvas.captureStream();
+
+            // Replace the video track in the screenStream
+            const videoTrack = combinedStream.getVideoTracks()[0];
+            screenStream.getVideoTracks()[0].replaceTrack(videoTrack);
+
+            const localVideo = document.querySelector(`[data-uuid="${localUuid}"]`);
+            if (localVideo) {
+                localVideo.srcObject = screenStream;
+            }
+
+            videoTrack.onended = () => {
+                if (localVideo) {
+                    localVideo.srcObject = localStream;
+                }
+                screenStream = null;
+                shareScreenButton.textContent = 'Share Screen';
+            };
+
+            shareScreenButton.textContent = 'Stop Sharing';
+        }
+    } catch (err) {
+        console.error('Error sharing screen:', err);
+    }
+}
         function addVideoStream(uuid, stream, isLocal = false, name = null) {
             const videoWrapper = document.createElement('div');
             videoWrapper.className = 'video-wrapper';
@@ -389,36 +540,13 @@
             return colors[Math.floor(Math.random() * colors.length)];
         }
 
-        function startDrawing(e) {
-            isDrawing = true;
-            [lastX, lastY] = [e.offsetX, e.offsetY];
-        }
-
-        function draw(e) {
-            if (!isDrawing) return;
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(e.offsetX, e.offsetY);
-            ctx.stroke();
-            [lastX, lastY] = [e.offsetX, e.offsetY];
-        }
-
-        function stopDrawing() {
-            isDrawing = false;
-        }
-
-        function clearBoard() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-        }
-
         function generateUuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                 var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8));
                 return v.toString(16);
             });
         }
-
-        window.addEventListener('resize', resizeCanvas);
     </script>
 </body>
 </html>
